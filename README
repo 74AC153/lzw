@@ -1,0 +1,62 @@
+A no-allocation naive lempel-ziv-welch codec^H^H^H^H^H entropy coder.
+
+FAQ:
+
+Q: Why should I use your program when there are others out there that have
+   better compression performance, are faster, are more portable, or even just
+   easier to understand?
+A: Ouch. :(
+
+How to use:
+
+Define two functions with prototype
+
+   // These functions are used to do the action I/O.
+   int emit_code(void *p, unsigned code);
+   int emit_char(void *p, unsigned char ch);
+
+
+Then to encode:
+
+    extern int emit_code(void *p, unsigned code);
+    extern void *emit_char_data;
+    unsigned char ch;
+    struct lzw_state enc;
+    lzw_state_init(&enc);
+    while(get_input_char(&ch))
+        // emit_code_data is passed as the arg 'p' to emit_code
+        if(lzw_encode(&enc, emit_code, emit_code_data, ch))
+            handle_error();
+    lzw_encode_finish(&enc, emit_code, emit_code_data);
+
+Or to decode:
+
+    extern int emit_char(void *p, unsigned char ch);
+    extern void *emit_char_data;
+    unsigned int code;
+    struct lzw_state dec;
+    lzw_state_init(&dec);
+    while(get_input_code(&code))
+        // emit_char_data is passed as the arg 'p' to emit_char
+        if(lzw_decode(&dec, emit_char, emit_char_data, code))
+				handle_error();
+
+Other tips & tricks:
+
+When building, there are two macros that can be overridden to control behavior:
+
+1. You can override the DICTSIZE macro to be any value strictly larger than
+   255. This affects the maximum sizeo of the string dictionary, which may have
+   an effect on the level of compression possible.
+
+2. You can override the SYMCOUNT macro to more closely correspond with the
+   number of symbols in the alphabet you are compressing. This may help make
+   some space in the dictionary for small values of DICTSIZE, or may simply
+   be more reflective of the alphabet you are compressing.
+
+Don't be afraid to peek inside the lzw_state struct, as the next_code field
+may be useful to pass to your I/O system to help determine the number of bits
+to use when emitting or reading the symbol codes.
+
+If the dictionary grows past DICTSIZE, it is reset by being truncated to
+SYMCOUNT.
