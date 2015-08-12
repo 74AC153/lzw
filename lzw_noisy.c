@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <assert.h>
 
 #include "lzw.h"
@@ -52,6 +53,13 @@ static struct dict_entry *alloc_dict_entry(
 	return entry;
 }
 
+static void print_reverse(struct dict_entry *entry)
+{
+	if(entry->parent)
+		print_reverse(entry->parent);
+	printf("%c", entry->ch);
+}
+
 typedef int (*emit_code_fn_t)(void *p, unsigned code);
 int lzw_encode(
 	struct lzw_state *state,
@@ -61,20 +69,33 @@ int lzw_encode(
 {
 	int status = 0;
 	struct dict_entry *child;
+	printf("encode '%c'\n", ch);
 	if(state->current == NULL) {
+		printf("encode ... (!current)\n");
 		state->current = state->dict + ch;
 	} else if((child = step(state->current, ch))) {
+		printf("encode ... (step)\n");
 		// have transition via ch
 		state->current = child;
 	} else {
+		printf("encode emit %u\n", state->current->code);
 		// don't have transition via ch
 		status = emit(p, state->current->code);
 		child = alloc_dict_entry(state, state->current, ch);
-		if(!child)
+		if(!child) {
+			printf("encode reset dict\n");
 			reset_dict(state);
+		} else {
+			printf("encode add dict %u ", child->code);
+			print_reverse(child);
+			printf("\n");
+		}
 		
 		state->current = state->dict + ch;
 	}
+	printf("encode cursor @ ");
+	print_reverse(state->current);
+	printf(" (%u)\n", state->current->code);
 
 	return status;
 }
@@ -84,7 +105,17 @@ int lzw_encode_finish(
 	emit_code_fn_t emit,
 	void *p)
 {
+	printf("encode (finish) emit %u\n", state->current->code);
 	return emit(p, state->current->code);
+}
+
+__attribute__((unused)) static void print_dict(struct lzw_state *state)
+{
+	for(unsigned i = 256; i < state->next_code; i++) {
+		printf("%u ", i);
+		print_reverse(state->dict + i);
+		printf("\n");
+	}
 }
 
 static unsigned char first(struct dict_entry *entry)
@@ -105,12 +136,15 @@ int lzw_decode(
 	{
 		if(ent->parent)
 			output(ent->parent);
+		printf("decode emit %c\n", ent->ch);
 		emit(p, ent->ch);
 	}
 
 	int status = 0;
 	struct dict_entry *entry, *child;
+	printf("decode %u\n", code);
 	if(state->current == NULL) {
+		printf("decode emit %c\n", state->dict[code].ch);
 		status = emit(p, state->dict[code].ch);
 		state->current = state->dict + state->dict[code].ch;
 	} else if(code >= state->next_code) {
@@ -119,6 +153,9 @@ int lzw_decode(
 
 		child = alloc_dict_entry(state, state->current, first(state->current));
 		assert(child); // encoder didn't reset, so we better not
+		printf("decode add dict %u ", child->code);
+		print_reverse(child);
+		printf("\n");
 
 		state->current = step(state->current, first(state->current));
 	} else {
@@ -126,11 +163,21 @@ int lzw_decode(
 		output(state->dict + code);
 
 		child = alloc_dict_entry(state, state->current, first(state->dict + code));
-		if(!child)
+		if(!child) {
+			printf("decode reset dict\n");
 			reset_dict(state);
+		} else {
+			printf("decode add dict %u ", child->code);
+			print_reverse(child);
+			printf("\n");
+		}
 
 		state->current = entry;
 	}
+
+	printf("decode cursor @ ");
+	print_reverse(state->current);
+	printf(" (%u)\n", state->current->code);
 
 	return status;
 }
