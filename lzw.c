@@ -5,14 +5,14 @@
 
 void lzw_state_init(struct lzw_state *state)
 {
-	for(unsigned i = 0; i < 256; i++) {
+	for(unsigned i = 0; i < SYMCOUNT; i++) {
 		state->dict[i].code = i;
 		state->dict[i].parent = NULL;
 		state->dict[i].sibling = NULL;
 		state->dict[i].child = NULL;
 		state->dict[i].ch = i;
 	}
-	state->next_code = 256;
+	state->next_code = SYMCOUNT;
 	state->current = NULL;
 }
 
@@ -27,8 +27,8 @@ static struct dict_entry *step(struct dict_entry *parent, unsigned char ch)
 
 static void reset_dict(struct lzw_state *state)
 {
-	state->next_code = 256;
-	for(unsigned i = 0; i < 256; i++) {
+	state->next_code = SYMCOUNT;
+	for(unsigned i = 0; i < SYMCOUNT; i++) {
 		state->dict[i].child = NULL;
 	}
 }

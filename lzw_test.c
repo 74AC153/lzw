@@ -41,6 +41,22 @@ char *tests[] = {
 	NULL,
 };
 
+// for debugging
+static void print_reverse(struct dict_entry *entry)
+{
+	if(entry->parent)
+		print_reverse(entry->parent);
+	printf("%c", entry->ch);
+}
+void print_dict(struct lzw_state *state)
+{
+	for(unsigned i = 256; i < state->next_code; i++) {
+		printf("%u ", i);
+		print_reverse(state->dict + i);
+		printf("\n");
+	}
+}
+
 int main(void)
 {
 	for(unsigned n = 0; tests[n]; n++) {

@@ -6,8 +6,12 @@ struct dict_entry {
 	unsigned char ch;
 };
 
-#if ! defined DICTSIZE
+#if ! defined(DICTSIZE)
 #define DICTSIZE 4096
+#endif
+
+#if ! defined(SYMCOUNT)
+#define SYMCOUNT 256
 #endif
 
 struct lzw_state {
