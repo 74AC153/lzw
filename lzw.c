@@ -9,10 +9,12 @@ struct dict_entry {
 	unsigned char ch;
 };
 
+#define DICTSIZE 260
+
 struct lzw_state {
 	struct dict_entry *current;
 	unsigned next_code;
-	struct dict_entry dict[4095];
+	struct dict_entry dict[DICTSIZE];
 };
 
 void lzw_state_init(struct lzw_state *state)
@@ -37,11 +39,21 @@ static struct dict_entry *step(struct dict_entry *parent, unsigned char ch)
 	return child;
 }
 
+static void reset_dict(struct lzw_state *state)
+{
+	state->next_code = 256;
+	for(unsigned i = 0; i < 256; i++) {
+		state->dict[i].child = NULL;
+	}
+}
+
 static struct dict_entry *alloc_dict_entry(
 	struct lzw_state *state,
 	struct dict_entry *parent,
 	unsigned char ch)
 {
+	if(state->next_code == DICTSIZE)
+		return NULL;
 	struct dict_entry *entry = state->dict + state->next_code;
 	entry->code = state->next_code++;
 	assert(state->next_code < 4095);
@@ -83,9 +95,14 @@ int lzw_encode(
 		// don't have transition via ch
 		status = emit(p, state->current->code);
 		child = alloc_dict_entry(state, state->current, ch);
-		printf("encode add dict %u ", child->code);
-		print_reverse(child);
-		printf("\n");
+		if(child) {
+			printf("encode add dict %u ", child->code);
+			print_reverse(child);
+			printf("\n");
+		} else {
+			printf("encode reset dict\n");
+			reset_dict(state);
+		}
 		
 		state->current = state->dict + ch;
 	}
@@ -148,6 +165,7 @@ int lzw_decode(
 		emit(p, first(state->current));
 
 		child = alloc_dict_entry(state, state->current, first(state->current));
+		assert(child); // encoder didn't reset, so we better not
 		printf("decode add dict %u ", child->code);
 		print_reverse(child);
 		printf("\n");
@@ -158,9 +176,14 @@ int lzw_decode(
 		output(state->dict + code);
 
 		child = alloc_dict_entry(state, state->current, first(state->dict + code));
-		printf("decode add dict %u ", child->code);
-		print_reverse(child);
-		printf("\n");
+		if(child) {
+			printf("decode add dict %u ", child->code);
+			print_reverse(child);
+			printf("\n");
+		} else {
+			printf("decode reset dict\n");
+			reset_dict(state);
+		}
 
 		state->current = entry;
 	}
@@ -188,34 +211,56 @@ int emit_char(void *p, unsigned char ch)
 	return 1;
 }
 
+char *tests[] = {
+	"a",
+	"aa",
+	"aaa",
+	"aaaa",
+	"aaaaa",
+	"aaaaaa",
+	"aba",
+	"abaa",
+	"abaaa",
+	"abaaaa",
+	"abcaaaa",
+	"abcdaaaa",
+	"abcdeaaaa",
+	"abcdefaaaa",
+	"abcdefgaaaa",
+	"abcdefghaaaa",
+	"ababcbababaaaaaa",
+	"abcabcabcabcabcabcabcabcabcabcabcabc",
+	NULL,
+};
+
 int main(void)
 {
-	unsigned char input[] = "abcabcabcabcabcabcabcabcabcabcabcabc";
-	//unsigned char input[] = "ababcbababaaaaaa";
-	//unsigned char input[] = "abab";
-	//unsigned char input[] = "aaa";
-	unsigned compressed[1024];
-	unsigned char output[1024];
-
-	struct lzw_state enc;
-	lzw_state_init(&enc);
-
-	unsigned *comp_curs = &compressed[0];
-	unsigned complen = 0;
-	for(unsigned i = 0; input[i]; i++)
-		complen += lzw_encode(&enc, emit_code, (void *)&comp_curs, input[i]);
-	complen += lzw_encode_finish(&enc, emit_code, (void *)&comp_curs);
-
-	struct lzw_state dec;
-	lzw_state_init(&dec);
-
-	unsigned char *dec_curs = &output[0];
-	unsigned declen = 0;
-	for(unsigned i = 0; i < complen; i++)
-		declen += lzw_decode(&dec, emit_char, (void *)&dec_curs, compressed[i]);
-
-	for(unsigned i = 0; input[i]; i++)
-		assert(input[i] == output[i]);
+	for(unsigned n = 0; tests[n]; n++) {
+		char *input = tests[n];
+		unsigned compressed[1024];
+		unsigned char output[1024];
+	
+		struct lzw_state enc;
+		lzw_state_init(&enc);
+	
+		unsigned *comp_curs = &compressed[0];
+		unsigned complen = 0;
+		for(unsigned i = 0; input[i]; i++)
+			complen += lzw_encode(&enc, emit_code, (void *)&comp_curs, input[i]);
+		complen += lzw_encode_finish(&enc, emit_code, (void *)&comp_curs);
+	
+	
+		struct lzw_state dec;
+		lzw_state_init(&dec);
+	
+		unsigned char *dec_curs = &output[0];
+		unsigned declen = 0;
+		for(unsigned i = 0; i < complen; i++)
+			declen += lzw_decode(&dec, emit_char, (void *)&dec_curs, compressed[i]);
+	
+		for(unsigned i = 0; input[i]; i++)
+			assert(input[i] == output[i]);
+	}
 
 	return 0;
 }
