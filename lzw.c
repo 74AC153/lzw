@@ -1,21 +1,7 @@
 #include <stdio.h>
 #include <assert.h>
 
-struct dict_entry {
-	unsigned code;
-	struct dict_entry *parent;
-	struct dict_entry *sibling;
-	struct dict_entry *child;
-	unsigned char ch;
-};
-
-#define DICTSIZE 260
-
-struct lzw_state {
-	struct dict_entry *current;
-	unsigned next_code;
-	struct dict_entry dict[DICTSIZE];
-};
+#include "lzw.h"
 
 void lzw_state_init(struct lzw_state *state)
 {
@@ -66,7 +52,7 @@ static struct dict_entry *alloc_dict_entry(
 	return entry;
 }
 
-void print_reverse(struct dict_entry *entry)
+static void print_reverse(struct dict_entry *entry)
 {
 	if(entry->parent)
 		print_reverse(entry->parent);
@@ -122,7 +108,7 @@ int lzw_encode_finish(
 	return emit(p, state->current->code);
 }
 
-void print_dict(struct lzw_state *state)
+__attribute__((unused)) static void print_dict(struct lzw_state *state)
 {
 	for(unsigned i = 256; i < state->next_code; i++) {
 		printf("%u ", i);
@@ -131,7 +117,7 @@ void print_dict(struct lzw_state *state)
 	}
 }
 
-unsigned char first(struct dict_entry *entry)
+static unsigned char first(struct dict_entry *entry)
 {
 	if(entry->parent == NULL)
 		return entry->ch;
@@ -193,74 +179,4 @@ int lzw_decode(
 	printf(" (%u)\n", state->current->code);
 
 	return status;
-}
-
-int emit_code(void *p, unsigned code)
-{
-	//printf("encode -> %u\n", code);
-	**(unsigned **)p = code;
-	*(unsigned**)p = *(unsigned**)p + 1;
-	return 1;
-}
-
-int emit_char(void *p, unsigned char ch)
-{
-	//printf("decode -> %c\n", ch);
-	**(unsigned char**)p = ch;
-	*(unsigned char**)p = *(unsigned char**)p + 1;
-	return 1;
-}
-
-char *tests[] = {
-	"a",
-	"aa",
-	"aaa",
-	"aaaa",
-	"aaaaa",
-	"aaaaaa",
-	"aba",
-	"abaa",
-	"abaaa",
-	"abaaaa",
-	"abcaaaa",
-	"abcdaaaa",
-	"abcdeaaaa",
-	"abcdefaaaa",
-	"abcdefgaaaa",
-	"abcdefghaaaa",
-	"ababcbababaaaaaa",
-	"abcabcabcabcabcabcabcabcabcabcabcabc",
-	NULL,
-};
-
-int main(void)
-{
-	for(unsigned n = 0; tests[n]; n++) {
-		char *input = tests[n];
-		unsigned compressed[1024];
-		unsigned char output[1024];
-	
-		struct lzw_state enc;
-		lzw_state_init(&enc);
-	
-		unsigned *comp_curs = &compressed[0];
-		unsigned complen = 0;
-		for(unsigned i = 0; input[i]; i++)
-			complen += lzw_encode(&enc, emit_code, (void *)&comp_curs, input[i]);
-		complen += lzw_encode_finish(&enc, emit_code, (void *)&comp_curs);
-	
-	
-		struct lzw_state dec;
-		lzw_state_init(&dec);
-	
-		unsigned char *dec_curs = &output[0];
-		unsigned declen = 0;
-		for(unsigned i = 0; i < complen; i++)
-			declen += lzw_decode(&dec, emit_char, (void *)&dec_curs, compressed[i]);
-	
-		for(unsigned i = 0; input[i]; i++)
-			assert(input[i] == output[i]);
-	}
-
-	return 0;
 }
