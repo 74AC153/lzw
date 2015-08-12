@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <assert.h>
+#include <string.h>
 
 #include "lzw.h"
 
@@ -8,7 +9,7 @@ int emit_code(void *p, unsigned code)
 	//printf("encode -> %u\n", code);
 	**(unsigned **)p = code;
 	*(unsigned**)p = *(unsigned**)p + 1;
-	return 1;
+	return 0;
 }
 
 int emit_char(void *p, unsigned char ch)
@@ -16,7 +17,7 @@ int emit_char(void *p, unsigned char ch)
 	//printf("decode -> %c\n", ch);
 	**(unsigned char**)p = ch;
 	*(unsigned char**)p = *(unsigned char**)p + 1;
-	return 1;
+	return 0;
 }
 
 char *tests[] = {
@@ -70,18 +71,19 @@ int main(void)
 		unsigned *comp_curs = &compressed[0];
 		unsigned complen = 0;
 		for(unsigned i = 0; input[i]; i++)
-			complen += lzw_encode(&enc, emit_code, (void *)&comp_curs, input[i]);
-		complen += lzw_encode_finish(&enc, emit_code, (void *)&comp_curs);
-	
+			assert(!lzw_encode(&enc, emit_code, (void *)&comp_curs, input[i]));
+		assert(!lzw_encode_finish(&enc, emit_code, (void *)&comp_curs));
+		complen = comp_curs - compressed;
 	
 		struct lzw_state dec;
 		lzw_state_init(&dec);
 	
 		unsigned char *dec_curs = &output[0];
-		unsigned declen = 0;
 		for(unsigned i = 0; i < complen; i++)
-			declen += lzw_decode(&dec, emit_char, (void *)&dec_curs, compressed[i]);
+			assert(!lzw_decode(&dec, emit_char, (void *)&dec_curs, compressed[i]));
+		unsigned declen = dec_curs - output;
 	
+		assert(declen == strlen(input));
 		for(unsigned i = 0; input[i]; i++)
 			assert(input[i] == output[i]);
 	}
