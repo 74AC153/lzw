@@ -29,7 +29,7 @@ static int encode(void)
 	unsigned *comp_curs;
 	unsigned complen;
 
-	while ((len = fread(input, 1, 1000, stdin)) > 0) {
+	while ((len = fread(input, sizeof(char), 1000, stdin)) > 0) {
 		comp_curs = &compressed[0];
 		complen = 0;
 		for(unsigned i = 0; i < len; i++)
@@ -64,7 +64,7 @@ static int decode(void)
 			assert(!lzw_decode(&dec, emit_char, (void *)&dec_curs, input[i]));
 		unsigned declen = dec_curs - output;
 
-		if (fwrite(output, sizeof(unsigned), declen, stdout) != declen)
+		if (fwrite(output, sizeof(char), declen, stdout) != declen)
 			return -1;
 	}
 
