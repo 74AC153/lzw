@@ -9,7 +9,7 @@ struct dict_entry {
 };
 
 #if ! defined(DICTSIZE)
-#define DICTSIZE 4096
+#define DICTSIZE (1u << 16)
 #endif
 
 #if ! defined(SYMCOUNT)
