@@ -85,9 +85,9 @@ int lzw_encode_finish(
 
 static unsigned char first(struct dict_entry *entry)
 {
-	if(entry->parent == NULL)
-		return entry->ch;
-	else return first(entry->parent);
+	while(entry->parent)
+		entry = entry->parent;
+	return entry->ch;
 }
 
 typedef int (*emit_char_fn_t)(void *p, unsigned char ch);
