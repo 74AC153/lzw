@@ -57,10 +57,10 @@ static void print_reverse(struct dict_entry *entry)
 typedef int (*emit_code_fn_t)(void *p, unsigned code);
 int lzw_encode(
 	struct lzw_state *state,
-	emit_code_fn_t emit,
-	void *p,
-	unsigned char ch)
+	unsigned char ch,
+	unsigned *code)
 {
+	int status = 0;
 	struct dict_entry *child;
 	printf("encode '%c'\n", ch);
 	if(state->current == NULL) {
@@ -73,8 +73,8 @@ int lzw_encode(
 	} else {
 		printf("encode emit %u\n", state->current->code);
 		// don't have transition via ch
-		if(emit(p, state->current->code))
-			return -1;
+		*code = state->current->code;
+		status = 1;
 		child = alloc_dict_entry(state, state->current, ch);
 		if(!child) {
 			printf("encode reset dict\n");
@@ -91,71 +91,57 @@ int lzw_encode(
 	print_reverse(state->current);
 	printf(" (%u)\n", state->current->code);
 
-	return 0;
+	return status;
 }
 
-int lzw_encode_finish(
-	struct lzw_state *state,
-	emit_code_fn_t emit,
-	void *p)
+int lzw_encode_finish(struct lzw_state *state, unsigned *code)
 {
 	printf("encode (finish) emit %u\n", state->current->code);
-	if(emit(p, state->current->code))
-		return -1;
-	return 0;
+	*code = state->current->code;
+	return 1;
 }
 
-static unsigned char first(struct dict_entry *entry)
-{
-	if(entry->parent == NULL)
-		return entry->ch;
-	else return first(entry->parent);
-}
-
-typedef int (*emit_char_fn_t)(void *p, unsigned char ch);
-int lzw_decode(
+unsigned char *lzw_decode(
 	struct lzw_state *state,
-	emit_char_fn_t emit,
-	void *p,
-	unsigned code)
+	unsigned code,
+	unsigned char outbuf[DICTSIZE])
 {
-	int output_entry(struct dict_entry *ent)
-	{
-		if(ent->parent)
-			if(output_entry(ent->parent))
-				return -1;
-		printf("decode emit %c\n", ent->ch);
-		if(emit(p, ent->ch))
-			return -1;
-		return 0;
-	}
-
+	unsigned char *outbuf_curs = &outbuf[DICTSIZE];
 	struct dict_entry *entry, *child;
-	printf("decode %u\n", code);
+
 	if(state->current == NULL) {
-		printf("decode emit %c\n", state->dict[code].ch);
-		if(emit(p, state->dict[code].ch))
-			return -1;
+		*(--outbuf_curs) = state->dict[code].ch; 
+
 		state->current = state->dict + state->dict[code].ch;
 	} else if(code >= state->next_code) {
-		if(output_entry(state->current))
-			return -1;
-		if(emit(p, first(state->current)))
-			return -1;
+		// this is a bit tricky: we need to emit the first character in the
+		// state chain leading up to current both first and last in the output.
+		unsigned char *last = --outbuf_curs;
+		for(entry = state->current ; entry->parent; entry = entry->parent) 
+			*(--outbuf_curs) = entry->ch;
+		// entry points to first item in state chain here
+		*(--outbuf_curs) = *last = entry->ch;
+		for(unsigned char *curs = outbuf_curs+1; curs < outbuf+DICTSIZE; curs++)
+			printf("decode emit %c ", *curs);
 
-		child = alloc_dict_entry(state, state->current, first(state->current));
+		// we also need add a dict entry with the current state chain's first
+		// entry appended, and step using that character
+		child = alloc_dict_entry(state, state->current, entry->ch);
 		assert(child); // encoder didn't reset, so we better not
 		printf("decode add dict %u ", child->code);
 		print_reverse(child);
 		printf("\n");
 
-		state->current = step(state->current, first(state->current));
+		state->current = step(state->current, entry->ch);
 	} else {
-		entry = state->dict + code;
-		if(output_entry(state->dict + code))
-			return -1;
+		for(entry = state->dict + code; entry->parent; entry = entry->parent) 
+			*(--outbuf_curs) = entry->ch;
+		// entry points to first item in state chain here
+		*(--outbuf_curs) = entry->ch;
+		for(unsigned char *curs = outbuf_curs+1; curs < outbuf+DICTSIZE; curs++)
+			printf("decode emit %c\n", *curs);
 
-		child = alloc_dict_entry(state, state->current, first(state->dict + code));
+		child = alloc_dict_entry(state, state->current, entry->ch);
 		if(!child) {
 			printf("decode reset dict\n");
 			reset_dict(state);
@@ -165,12 +151,12 @@ int lzw_decode(
 			printf("\n");
 		}
 
-		state->current = entry;
+		state->current = state->dict + code;
 	}
 
 	printf("decode cursor @ ");
 	print_reverse(state->current);
 	printf(" (%u)\n", state->current->code);
 
-	return 0;
+	return outbuf_curs;
 }

@@ -7,20 +7,6 @@
 
 #include "lzw.h"
 
-static int emit_code(void *p, unsigned code)
-{
-	**(unsigned **)p = code;
-	*(unsigned**)p = *(unsigned**)p + 1;
-	return 0;
-}
-
-static int emit_char(void *p, unsigned char ch)
-{
-	**(unsigned char**)p = ch;
-	*(unsigned char**)p = *(unsigned char**)p + 1;
-	return 0;
-}
-
 static unsigned bytesPerSymbol()
 {
 	assert(DICTSIZE <= (1llu << (CHAR_BIT * sizeof(unsigned))));
@@ -81,7 +67,7 @@ static int encode(void)
 		comp_curs = &compressed[0];
 		complen = 0;
 		for(unsigned i = 0; i < len; i++)
-			assert(!lzw_encode(&enc, emit_code, (void *)&comp_curs, input[i]));
+			comp_curs += lzw_encode(&enc, input[i], comp_curs);
 		complen = comp_curs - compressed;
 
 		pack(compressed, complen, writeBuffer);
@@ -90,7 +76,7 @@ static int encode(void)
 	}
 
 	comp_curs = compressed;
-	assert(!lzw_encode_finish(&enc, emit_code, (void *) &comp_curs));
+	comp_curs += lzw_encode_finish(&enc, comp_curs);
 	complen = comp_curs - compressed;
 	pack(compressed, complen, writeBuffer);
 	if (fwrite(writeBuffer, symBytes, complen, stdout) != complen)
@@ -110,11 +96,16 @@ static int decode(void)
 	unsigned char output[1024];
 	size_t len;
 
+	unsigned char tempbuf[DICTSIZE];
+	unsigned char *tempbuf_end = tempbuf + DICTSIZE;
 	while ((len = fread(readBuffer, symBytes, 50, stdin)) > 0) {
 		unpack(readBuffer, len * symBytes, input);
 		unsigned char *dec_curs = &output[0];
-		for(unsigned i = 0; i < len; i++)
-			assert(!lzw_decode(&dec, emit_char, (void *)&dec_curs, input[i]));
+		for(unsigned i = 0; i < len; i++) {
+			unsigned char *tempbuf_curs = lzw_decode(&dec, input[i], tempbuf);
+			memcpy(dec_curs, tempbuf_curs, (tempbuf_end - tempbuf_curs));
+			dec_curs += (tempbuf_end - tempbuf_curs);
+		}
 		unsigned declen = dec_curs - output;
 
 		if (fwrite(output, sizeof(char), declen, stdout) != declen)

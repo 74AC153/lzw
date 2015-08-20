@@ -24,24 +24,24 @@ struct lzw_state {
 
 void lzw_state_init(struct lzw_state *state);
 
-// all (should) return 0 on success, -1 on error
-typedef int (*emit_code_fn_t)(void *p, unsigned code);
+// returns:
+// 1: *code output
+// 0: no output yet
 int lzw_encode(
 	struct lzw_state *state,
-	emit_code_fn_t emit,
-	void *p,
-	unsigned char ch);
+	unsigned char ch,
+	unsigned *code);
 
+// always returns 1
 int lzw_encode_finish(
 	struct lzw_state *state,
-	emit_code_fn_t emit,
-	void *p);
+	unsigned *code);
 
-typedef int (*emit_char_fn_t)(void *p, unsigned char ch);
-int lzw_decode(
+// returns pointer into outbuf at start of emitted chars.
+// chars from return value to &outbuf[DICTSIZE-1] contain output
+unsigned char *lzw_decode(
 	struct lzw_state *state,
-	emit_char_fn_t emit,
-	void *p,
-	unsigned code);
+	unsigned code,
+	unsigned char outbuf[DICTSIZE]);
 
 #endif
